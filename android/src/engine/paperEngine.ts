@@ -269,108 +269,89 @@ export function executeShot(
 
   const landingCells = getOccupiedCells(endPos);
 
-  // When opponent crosses or lands: erase last move, never detach from starting point
+  // When opponent crosses or lands:
+  // "consider the hex dot initial point be R ( root ) and point H ( head ) and point A and B be the point of the line which opponent cross , then line from point A to H should be erared , so the thing is when opponent crosses a player hex , from that line to head ( movement made after that line ) should be erased . and the last thing is , player will ( of any type classic or tree or in future if we make any ) will be connected to their root ( or initial point )"
   updatedDots.forEach((d) => {
     if (d.player !== activePlayer && d.isAlive) {
-      if (d.characterId === 'tree') {
-        // Check if mover cuts the hand segment AB
-        if (d.handSegment) {
-          const cutsHand =
-            areSegmentsIntersecting(
-              newSegment.start,
-              newSegment.end,
-              d.handSegment.start,
-              d.handSegment.end,
-              false
-            ) || pointsEqual(endPos, d.handSegment.end);
-          if (cutsHand) {
-            d.handPos = undefined;
-            d.handSegment = undefined;
-            prunedLinesCount++;
-            featureMessages.push(
-              d.player === activePlayer
-                ? 'Your Tree hand was cut!'
-                : 'Opponent Tree hand was cut!'
-            );
-          }
+      // 1. Check if any body segment S_i (from Point A to Point B) in d.history is crossed or landed upon
+      let cutIndex = -1;
+      for (let i = 0; i < d.history.length; i++) {
+        const seg = d.history[i];
+        const intersects = areSegmentsIntersecting(
+          newSegment.start,
+          newSegment.end,
+          seg.start,
+          seg.end,
+          false
+        );
+        const landsOnSeg = getCellsAlongPath(seg.start, seg.end).some((pt) =>
+          pointsEqual(pt, endPos)
+        );
+        if (intersects || landsOnSeg) {
+          cutIndex = i;
+          break; // Earliest segment crossed from root
         }
+      }
 
-        // Check if mover cuts any persistent body segment in d.history or hits head
-        let cutsBody = false;
-        for (const seg of d.history) {
-          if (
-            areSegmentsIntersecting(
-              newSegment.start,
-              newSegment.end,
-              seg.start,
-              seg.end,
-              false
-            )
-          ) {
-            cutsBody = true;
-            break;
-          }
+      if (cutIndex !== -1) {
+        // Point A is the start of the crossed line (seg.start)
+        const cutPointA = { ...d.history[cutIndex].start };
+        const pruned = d.history.length - cutIndex;
+        // Erase line from Point A to Head H (all movements made after Point A)
+        d.history = d.history.slice(0, cutIndex);
+        // Head relocates to Point A
+        d.currentPos = cutPointA;
+        // If Tree, clear any outstretched hand
+        if (d.characterId === 'tree') {
+          d.handPos = undefined;
+          d.handSegment = undefined;
         }
-        const isHeadHit = pointsEqual(endPos, d.currentPos);
-
-        if (cutsBody || isHeadHit) {
-          if (d.handSegment) {
-            d.handPos = undefined;
-            d.handSegment = undefined;
-          }
-          if (d.history.length > 0) {
-            d.history.pop();
-            if (d.history.length > 0) {
-              d.currentPos = { ...d.history[d.history.length - 1].end };
-            } else {
-              d.currentPos = { ...(d.initialStartPos ?? d.currentPos) };
-            }
-            prunedLinesCount++;
-            featureMessages.push(
-              d.player === activePlayer
-                ? 'Your Tree last move was erased!'
-                : 'Opponent Tree last move was erased!'
-            );
-          } else {
-            d.currentPos = { ...(d.initialStartPos ?? d.currentPos) };
-          }
+        prunedLinesCount += pruned;
+        featureMessages.push(
+          d.player === activePlayer
+            ? `Your trail was cut! Line from cut point to head erased (-${pruned} moves).`
+            : `Opponent trail cut! Line from cut point to head erased (-${pruned} moves).`
+        );
+      } else if (d.characterId === 'tree' && d.handSegment) {
+        // 2. Tree: check if mover cuts outstretched hand segment AB
+        const cutsHand =
+          areSegmentsIntersecting(
+            newSegment.start,
+            newSegment.end,
+            d.handSegment.start,
+            d.handSegment.end,
+            false
+          ) || pointsEqual(endPos, d.handSegment.end);
+        if (cutsHand) {
+          d.handPos = undefined;
+          d.handSegment = undefined;
+          prunedLinesCount++;
+          featureMessages.push(
+            d.player === activePlayer
+              ? 'Your Tree hand was cut!'
+              : 'Opponent Tree hand was cut!'
+          );
         }
-      } else {
-        // Classic dot:
-        let crossed = false;
-        for (const seg of d.history) {
-          if (
-            areSegmentsIntersecting(
-              newSegment.start,
-              newSegment.end,
-              seg.start,
-              seg.end,
-              false
-            )
-          ) {
-            crossed = true;
-            break;
-          }
+      } else if (pointsEqual(endPos, d.currentPos)) {
+        // 3. Opponent lands directly on Head H: erase last move leading into H
+        if (d.characterId === 'tree') {
+          d.handPos = undefined;
+          d.handSegment = undefined;
         }
-        const isHeadHit = pointsEqual(endPos, d.currentPos);
-
-        if (crossed || isHeadHit) {
-          if (d.history.length > 0) {
-            d.history.pop();
-            if (d.history.length > 0) {
-              d.currentPos = { ...d.history[d.history.length - 1].end };
-            } else {
-              d.currentPos = { ...(d.initialStartPos ?? d.currentPos) };
-            }
-            prunedLinesCount++;
-            featureMessages.push(
-              d.player === activePlayer
-                ? 'Your last move was erased by opponent!'
-                : 'Opponent last move was erased!'
-            );
-          } else {
-            d.currentPos = { ...(d.initialStartPos ?? d.currentPos) };
-          }
+        if (d.history.length > 0) {
+          d.history.pop();
+          d.currentPos =
+            d.history.length > 0
+              ? { ...d.history[d.history.length - 1].end }
+              : { ...(d.initialStartPos ?? d.currentPos) };
+          prunedLinesCount++;
+          featureMessages.push(
+            d.player === activePlayer
+              ? 'Your head was hit! Last move erased.'
+              : 'Opponent head was hit! Last move erased.'
+          );
+        } else {
+          d.currentPos = { ...(d.initialStartPos ?? d.currentPos) };
         }
       }
     }
@@ -460,10 +441,7 @@ export function executeShot(
     // Classic dot:
     finalMovingDot.currentPos = endPos;
     finalMovingDot.history.push(newSegment);
-    const maxTrail = getMaxTrailForDot(finalMovingDot);
-    while (finalMovingDot.history.length > maxTrail) {
-      finalMovingDot.history.shift();
-    }
+    // Trail remains continuously connected to root (no shifting/pruning)
 
     // "all the surrouning hex of the classic head should be colored"
     const paintCells = getSurroundingPaintHexes(endPos);
@@ -477,7 +455,7 @@ export function executeShot(
     }
     featureMessages.push(
       activePlayer === 1
-        ? `Classic colored head and all surrounding hexes (+${capturedThisTurn} hexes)!`
+        ? `Classic colored head and 2 layers of surrounding hexes (+${capturedThisTurn} hexes)!`
         : `Bot Classic colored surrounding hexes!`
     );
   }

@@ -21,7 +21,7 @@ export const PLAYER_COLORS = {
   P2: {
     name: 'Electric Violet',
     body: '#7C3AED',                    // Stronger/darker shade for player dot & trail body
-    region: 'rgba(167, 139, 250, 0.42)', // Lighter version for colored captured hexes
+    region: 'rgba(139, 92, 246, 0.58)', // Richer, slightly darker purple for captured hexes
     accent: '#8B5CF6',                  // Bright accent
     light: '#DDD6FE',
   },

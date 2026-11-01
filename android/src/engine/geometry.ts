@@ -435,18 +435,26 @@ export function getNearbyPaintHexes(center: Point, count: number = 5): Point[] {
 }
 
 
-/** Returns center and all surrounding neighbor hexes in all 6 directions. */
-export function getSurroundingPaintHexes(center: Point): Point[] {
+/** Returns center and two surrounding layers of hexes in all directions (distance <= 2). */
+export function getSurroundingPaintHexes(center: Point, layers: number = 2): Point[] {
   const result: Point[] = [center];
   const seen = new Set<string>([`${center.r},${center.c}`]);
+  let currentLayer: Point[] = [center];
 
-  for (const dir of HEX_DIRECTIONS) {
-    const neighbor = stepHex(center, dir);
-    const key = `${neighbor.r},${neighbor.c}`;
-    if (isWithinBounds(neighbor) && !seen.has(key)) {
-      seen.add(key);
-      result.push(neighbor);
+  for (let l = 0; l < layers; l++) {
+    const nextLayer: Point[] = [];
+    for (const pt of currentLayer) {
+      for (const dir of HEX_DIRECTIONS) {
+        const neighbor = stepHex(pt, dir);
+        const key = `${neighbor.r},${neighbor.c}`;
+        if (isWithinBounds(neighbor) && !seen.has(key)) {
+          seen.add(key);
+          result.push(neighbor);
+          nextLayer.push(neighbor);
+        }
+      }
     }
+    currentLayer = nextLayer;
   }
 
   return result;

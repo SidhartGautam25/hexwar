@@ -15,16 +15,11 @@ export function getMaxTrailLength(dot: Dot): number {
 export { getConnectedTrailHistory } from './geometry';
 
 export function getVisibleTrailSegments(dot: Dot): LineSegment[] {
-  if (dot.characterId === 'tree') {
-    if (dot.handSegment) {
-      return [...dot.history, dot.handSegment];
-    }
-    return dot.history;
+  // All dots remain continuously connected to their root
+  if (dot.characterId === 'tree' && dot.handSegment) {
+    return [...dot.history, dot.handSegment];
   }
-  const connected = getConnectedTrailHistory(dot.history, dot.currentPos);
-  const { visibleTrailLength } = getCharacter(dot.characterId);
-  if (connected.length <= visibleTrailLength) return connected;
-  return connected.slice(connected.length - visibleTrailLength);
+  return dot.history;
 }
 
 /** Returns available nodes of Tree that have fewer than 2 children (can branch). */
