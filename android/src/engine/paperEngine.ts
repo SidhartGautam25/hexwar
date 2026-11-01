@@ -21,6 +21,9 @@ import {
   HEX_DIRECTIONS,
   getHexesInRadius,
   getHexesInTriangleArea,
+  getNearbyPaintHexes,
+  getSurroundingPaintHexes,
+  getSegmentCells,
 } from './geometry';
 import { EMPTY_WALLET, mergeWallets } from '../utils/wallet';
 import {
@@ -238,6 +241,11 @@ export function executeShot(
   const updatedDots: Dot[] = dots.map((d) => ({
     ...d,
     currentPos: { ...d.currentPos },
+    initialStartPos: d.initialStartPos ? { ...d.initialStartPos } : { ...d.currentPos },
+    handPos: d.handPos ? { ...d.handPos } : undefined,
+    handSegment: d.handSegment
+      ? { ...d.handSegment, start: { ...d.handSegment.start }, end: { ...d.handSegment.end } }
+      : undefined,
     history: d.history.map((seg) => ({
       ...seg,
       start: { ...seg.start },
@@ -261,79 +269,107 @@ export function executeShot(
 
   const landingCells = getOccupiedCells(endPos);
 
-  // Kills and Cuts logic
+  // When opponent crosses or lands: erase last move, never detach from starting point
   updatedDots.forEach((d) => {
     if (d.player !== activePlayer && d.isAlive) {
       if (d.characterId === 'tree') {
-        // Direct hit on Tree root kills Tree dot completely
-        const rootNode = d.treeNodes?.find((n) => n.parentId === null);
-        const rootPos = rootNode?.pos ?? d.currentPos;
-        if (
-          landingCells.some((lCell) => pointsEqual(lCell, rootPos)) &&
-          canEliminateDot(d, gameState.boardFeatures)
-        ) {
-          d.isAlive = false;
-          d.history = [];
-          d.treeBranches = [];
-          d.treeNodes = [];
-          killedDots.push(d.id);
-        } else {
-          // Check if mover cuts any branch of the opponent Tree or lands on a branch endpoint
-          const cutBranches: string[] = [];
-          if (d.treeBranches) {
-            for (const branch of d.treeBranches) {
-              const branchIntersects = areSegmentsIntersecting(
-                newSegment.start,
-                newSegment.end,
-                branch.start,
-                branch.end,
-                false
-              );
-              const hitsBranchEnd = landingCells.some((lCell) => pointsEqual(lCell, branch.end));
-              if (branchIntersects || hitsBranchEnd) {
-                cutBranches.push(branch.id);
-              }
-            }
+        // Check if mover cuts the hand segment AB
+        if (d.handSegment) {
+          const cutsHand =
+            areSegmentsIntersecting(
+              newSegment.start,
+              newSegment.end,
+              d.handSegment.start,
+              d.handSegment.end,
+              false
+            ) || pointsEqual(endPos, d.handSegment.end);
+          if (cutsHand) {
+            d.handPos = undefined;
+            d.handSegment = undefined;
+            prunedLinesCount++;
+            featureMessages.push(
+              d.player === activePlayer
+                ? 'Your Tree hand was cut!'
+                : 'Opponent Tree hand was cut!'
+            );
           }
-          if (cutBranches.length > 0) {
-            let totalPruned = 0;
-            for (const branchId of cutBranches) {
-              const res = pruneTreeBranch(d, branchId);
-              totalPruned += res.prunedCount;
+        }
+
+        // Check if mover cuts any persistent body segment in d.history or hits head
+        let cutsBody = false;
+        for (const seg of d.history) {
+          if (
+            areSegmentsIntersecting(
+              newSegment.start,
+              newSegment.end,
+              seg.start,
+              seg.end,
+              false
+            )
+          ) {
+            cutsBody = true;
+            break;
+          }
+        }
+        const isHeadHit = pointsEqual(endPos, d.currentPos);
+
+        if (cutsBody || isHeadHit) {
+          if (d.handSegment) {
+            d.handPos = undefined;
+            d.handSegment = undefined;
+          }
+          if (d.history.length > 0) {
+            d.history.pop();
+            if (d.history.length > 0) {
+              d.currentPos = { ...d.history[d.history.length - 1].end };
+            } else {
+              d.currentPos = { ...(d.initialStartPos ?? d.currentPos) };
             }
-            if (totalPruned > 0) {
-              prunedLinesCount += totalPruned;
-              featureMessages.push(
-                activePlayer === 1
-                  ? `Opponent Tree pruned! (${totalPruned} branch${totalPruned > 1 ? 'es' : ''} removed)`
-                  : `Your Tree was pruned! (${totalPruned} branch${totalPruned > 1 ? 'es' : ''} removed)`
-              );
-            }
+            prunedLinesCount++;
+            featureMessages.push(
+              d.player === activePlayer
+                ? 'Your Tree last move was erased!'
+                : 'Opponent Tree last move was erased!'
+            );
+          } else {
+            d.currentPos = { ...(d.initialStartPos ?? d.currentPos) };
           }
         }
       } else {
-        // Classic dot: direct hit or trail cut
-        const victimCells = getOccupiedCells(d.currentPos);
-        const isDirectHit = landingCells.some((lCell) =>
-          victimCells.some((vCell) => pointsEqual(lCell, vCell))
-        );
-        if (isDirectHit && canEliminateDot(d, gameState.boardFeatures)) {
-          d.isAlive = false;
-          d.history = [];
-          killedDots.push(d.id);
-        } else if (
-          doesTrailCutKillDot(
-            d,
-            newSegment.start,
-            newSegment.end,
-            gameState.boardFeatures,
-            movingDot
-          )
-        ) {
-          d.isAlive = false;
-          d.history = [];
-          if (!killedDots.includes(d.id)) {
-            killedDots.push(d.id);
+        // Classic dot:
+        let crossed = false;
+        for (const seg of d.history) {
+          if (
+            areSegmentsIntersecting(
+              newSegment.start,
+              newSegment.end,
+              seg.start,
+              seg.end,
+              false
+            )
+          ) {
+            crossed = true;
+            break;
+          }
+        }
+        const isHeadHit = pointsEqual(endPos, d.currentPos);
+
+        if (crossed || isHeadHit) {
+          if (d.history.length > 0) {
+            d.history.pop();
+            if (d.history.length > 0) {
+              d.currentPos = { ...d.history[d.history.length - 1].end };
+            } else {
+              d.currentPos = { ...(d.initialStartPos ?? d.currentPos) };
+            }
+            prunedLinesCount++;
+            featureMessages.push(
+              d.player === activePlayer
+                ? 'Your last move was erased by opponent!'
+                : 'Opponent last move was erased!'
+            );
+          } else {
+            d.currentPos = { ...(d.initialStartPos ?? d.currentPos) };
           }
         }
       }
@@ -364,69 +400,61 @@ export function executeShot(
   const blackBoxKeys = new Set((gameState.blackBoxes ?? []).map((p) => `${p.r},${p.c}`));
 
   if (finalMovingDot.characterId === 'tree') {
-    if (!finalMovingDot.treeNodes || finalMovingDot.treeNodes.length === 0) {
-      finalMovingDot.treeNodes = [
-        { id: `${finalMovingDot.id}_root`, pos: { ...startPos }, parentId: null, childrenIds: [] },
-      ];
-    }
-    if (!finalMovingDot.treeBranches) {
-      finalMovingDot.treeBranches = [];
-    }
+    if (!finalMovingDot.handPos) {
+      // Move 1: Tree stretches to hand (Point B)
+      // "head is still at point A but its body streches to point B called hand"
+      finalMovingDot.handPos = { ...endPos };
+      finalMovingDot.handSegment = {
+        id: `${finalMovingDot.id}_hand_${Date.now()}`,
+        start: { ...startPos },
+        end: { ...endPos },
+      };
+      finalMovingDot.currentPos = { ...startPos }; // Head remains at point A!
+      // Tree body history is NOT erased; previous body (e.g. RA) stays!
 
-    const fromNodeId = finalMovingDot.activeHeadNodeId ?? `${finalMovingDot.id}_root`;
-    let fromNode = finalMovingDot.treeNodes.find((n) => n.id === fromNodeId);
-    if (!fromNode) {
-      fromNode = finalMovingDot.treeNodes[0];
-    }
+      featureMessages.push(
+        activePlayer === 1
+          ? `Tree stretched hand to (${endPos.r}, ${endPos.c})! Next move from head.`
+          : `Bot Tree stretched hand.`
+      );
+    } else {
+      // Move 2: Tree moves from head (Point A) to Point C
+      // "region between line AB and AC got colored and not the region surrounding head ( its for classic only )"
+      // "tree head will be now at point C"
+      // "line AB ( only line AB will disppear and the line RA or AC , they should still be there )"
+      const oldHead = { ...startPos }; // Point A
+      const hand = { ...finalMovingDot.handPos }; // Point B
+      const newHead = { ...endPos }; // Point C
 
-    const timestamp = Date.now();
-    const rnd = Math.random().toString(36).substring(2, 6);
-    const newNodeId = `${finalMovingDot.id}_node_${timestamp}_${rnd}`;
-    const newBranchId = `${finalMovingDot.id}_branch_${timestamp}_${rnd}`;
-
-    const newNode: TreeNode = {
-      id: newNodeId,
-      pos: { ...endPos },
-      parentId: fromNode.id,
-      childrenIds: [],
-    };
-    const newBranch: TreeBranch = {
-      id: newBranchId,
-      fromNodeId: fromNode.id,
-      toNodeId: newNodeId,
-      start: { ...fromNode.pos },
-      end: { ...endPos },
-    };
-
-    fromNode.childrenIds.push(newNodeId);
-    finalMovingDot.treeNodes.push(newNode);
-    finalMovingDot.treeBranches.push(newBranch);
-    finalMovingDot.history.push({ id: newBranchId, start: newBranch.start, end: newBranch.end });
-    finalMovingDot.currentPos = { ...endPos };
-    finalMovingDot.activeHeadNodeId = newNodeId;
-
-    // When the second branch is drawn from the same head, area is captured!
-    if (fromNode.childrenIds.length === 2) {
-      const child1Id = fromNode.childrenIds[0];
-      const child2Id = fromNode.childrenIds[1];
-      const child1 = finalMovingDot.treeNodes.find((n) => n.id === child1Id);
-      const child2 = finalMovingDot.treeNodes.find((n) => n.id === child2Id);
-      if (child1 && child2) {
-        const areaCells = getHexesInTriangleArea(fromNode.pos, child1.pos, child2.pos);
-        let capturedThisTurn = 0;
-        for (const cell of areaCells) {
-          const key = `${cell.r},${cell.c}`;
-          if (!blackBoxKeys.has(key)) {
-            updatedCapturedHexes[key] = activePlayer;
-            capturedThisTurn++;
-          }
+      // 1. Region between line AB and AC gets colored (ONLY region between AB and AC, NOT surrounding head)
+      const regionCells = getHexesInTriangleArea(oldHead, hand, newHead);
+      let capturedThisTurn = 0;
+      for (const cell of regionCells) {
+        const key = `${cell.r},${cell.c}`;
+        if (!blackBoxKeys.has(key)) {
+          // Replaces previous player's color with activePlayer's color:
+          updatedCapturedHexes[key] = activePlayer;
+          capturedThisTurn++;
         }
-        featureMessages.push(
-          activePlayer === 1
-            ? `Tree area captured! (+${capturedThisTurn} hexes)`
-            : `Bot Tree area captured!`
-        );
       }
+
+      // 2. Tree head will be now at Point C:
+      finalMovingDot.currentPos = { ...newHead };
+
+      // 3. Line AB disappears, and line AC is added (line RA and AC both remain in history!):
+      finalMovingDot.handPos = undefined;
+      finalMovingDot.handSegment = undefined;
+      finalMovingDot.history.push({
+        id: generateSegmentId(finalMovingDot.id),
+        start: { ...oldHead },
+        end: { ...newHead },
+      });
+
+      featureMessages.push(
+        activePlayer === 1
+          ? `Tree colored region between hand and new movement (+${capturedThisTurn} hexes)!`
+          : `Bot Tree captured region!`
+      );
     }
   } else {
     // Classic dot:
@@ -437,10 +465,10 @@ export function executeShot(
       finalMovingDot.history.shift();
     }
 
-    // Classic Radial Capture: captures all hexes in radius equal to tokenValue
-    const radiusCells = getHexesInRadius(endPos, tokenValue);
+    // "all the surrouning hex of the classic head should be colored"
+    const paintCells = getSurroundingPaintHexes(endPos);
     let capturedThisTurn = 0;
-    for (const cell of radiusCells) {
+    for (const cell of paintCells) {
       const key = `${cell.r},${cell.c}`;
       if (!blackBoxKeys.has(key)) {
         updatedCapturedHexes[key] = activePlayer;
@@ -449,8 +477,8 @@ export function executeShot(
     }
     featureMessages.push(
       activePlayer === 1
-        ? `Radial capture (radius ${tokenValue})! (+${capturedThisTurn} hexes)`
-        : `Bot captured radius ${tokenValue}!`
+        ? `Classic colored head and all surrounding hexes (+${capturedThisTurn} hexes)!`
+        : `Bot Classic colored surrounding hexes!`
     );
   }
 

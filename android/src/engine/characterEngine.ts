@@ -16,12 +16,8 @@ export { getConnectedTrailHistory } from './geometry';
 
 export function getVisibleTrailSegments(dot: Dot): LineSegment[] {
   if (dot.characterId === 'tree') {
-    if (dot.treeBranches && dot.treeBranches.length > 0) {
-      return dot.treeBranches.map((b) => ({
-        id: b.id,
-        start: { ...b.start },
-        end: { ...b.end },
-      }));
+    if (dot.handSegment) {
+      return [...dot.history, dot.handSegment];
     }
     return dot.history;
   }

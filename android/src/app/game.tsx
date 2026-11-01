@@ -18,6 +18,7 @@ import { GridCanvas } from '../components/canvas/GridCanvas';
 import { TokenPicker } from '../components/ui/TokenPicker';
 import { Direction } from '../types/game';
 import { parseCharacterLoadout } from '../constants/characters';
+import { PLAYER_COLORS } from '../constants/gameColors';
 import { CollectionPopup } from '../components/ui/CollectionPopup';
 import { formatWalletSummary } from '../utils/wallet';
 import { GRID_CONFIG } from '../constants/board';
@@ -64,10 +65,10 @@ export default function GameScreen() {
   const themeColors = activeTheme.colors;
 
   // Custom Colors
-  const p1DotColor = params.p1DotColor || themeColors.p1Shades[0];
-  const p1LineColor = params.p1LineColor || themeColors.p1Shades[0];
-  const p2DotColor = params.p2DotColor || themeColors.p2Shades[0];
-  const p2LineColor = params.p2LineColor || themeColors.p2Shades[0];
+  const p1DotColor = params.p1DotColor || themeColors.p1Shades[0] || PLAYER_COLORS.P1.body;
+  const p1LineColor = params.p1LineColor || themeColors.p1Shades[1] || PLAYER_COLORS.P1.accent;
+  const p2DotColor = params.p2DotColor || themeColors.p2Shades[0] || PLAYER_COLORS.P2.body;
+  const p2LineColor = params.p2LineColor || themeColors.p2Shades[1] || PLAYER_COLORS.P2.accent;
 
   // Custom Lines & Loadouts
   const selectedLines = params.lines ? params.lines.split(',') : ['solid', 'dotted', 'glow'];
@@ -158,16 +159,10 @@ export default function GameScreen() {
   return (
     <View style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
       {/* Top Status Bar Spacer */}
-      <View style={{ height: Math.max(insets.top, 8) + 32, backgroundColor: themeColors.background, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ height: Math.max(insets.top, 8) + 12, backgroundColor: themeColors.background, justifyContent: 'center', alignItems: 'flex-start', paddingHorizontal: 12 }}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton} activeOpacity={0.7}>
           <Text style={[styles.backText, { color: themeColors.textSecondary }]}>←</Text>
         </TouchableOpacity>
-        <Text style={{ color: themeColors.textPrimary, fontSize: 15, fontWeight: '700' }}>
-          {activeLevel.name}: {activeLevel.title}
-        </Text>
-        <Text style={{ color: themeColors.textSecondary, fontSize: 11, fontWeight: '500' }}>
-          {activeLevel.description}
-        </Text>
       </View>
       <StatusBar
         barStyle={activeTheme.dark ? 'light-content' : 'dark-content'}
@@ -261,42 +256,7 @@ export default function GameScreen() {
 
         {/* Bottom Panel Section */}
         <View style={[styles.bottomSection, { marginBottom: isThreeButtonNav ? 4 : Math.max(insets.bottom, 8) }]}>
-          {/* Unit Selector Row for 3 units */}
-          <View style={styles.unitSelectorRow}>
-            {dots
-              .filter((d) => d.player === 1)
-              .map((dot, idx) => {
-                const isSelected = selectedDotId === dot.id;
-                const isTree = dot.characterId === 'tree';
-                const name = isTree ? 'Tree' : `Classic ${idx === 0 ? 'L' : 'R'}`;
-                return (
-                  <TouchableOpacity
-                    key={dot.id}
-                    disabled={!dot.isAlive || activePlayer !== 1}
-                    onPress={() => selectDot(dot.id)}
-                    style={[
-                      styles.unitBadge,
-                      {
-                        borderColor: isSelected ? p1DotColor : '#334155',
-                        backgroundColor: isSelected ? 'rgba(0, 229, 255, 0.18)' : '#1E293B',
-                        opacity: dot.isAlive ? 1 : 0.35,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.unitBadgeText,
-                        { color: isSelected ? '#FFFFFF' : '#94A3B8' },
-                      ]}
-                    >
-                      {isTree ? '🌲 ' : '⚡ '}
-                      {name}
-                      {!dot.isAlive && ' ✕'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-          </View>
+
 
           <TokenPicker
             tokens={player1Tokens}

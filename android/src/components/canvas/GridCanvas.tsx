@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { G, Path, Rect } from 'react-native-svg';
 import { Dot, Direction, CharacterId, CurrencyRegion, BoardFeatureInstance, Point } from '../../types/game';
 import { GRID_CONFIG } from '../../constants/board';
+import { PLAYER_COLORS } from '../../constants/gameColors';
 import { HexChain } from './HexChain';
 import { BaseDotMarker } from './BaseDotMarker';
 import {
@@ -93,21 +94,15 @@ export const GridCanvas: React.FC<GridCanvasProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
 
-  // Compute available space dynamically from flex measured dimensions
-  const maxBoardHeight = Math.max(120, maxHeight - 8);
-  const maxBoardWidth = Math.max(120, maxWidth - 8);
-
-  const pad = 2;
+  // Compute available space dynamically: width covers full screen width
+  const pad = 0;
   const widthUnits = Math.sqrt(3) * (GRID_CONFIG.COLS + 0.5);
   const heightUnits = 1.5 * (GRID_CONFIG.ROWS - 1) + 2;
-  const cellSize = Math.max(
-    4,
-    Math.min((maxBoardWidth - pad * 2) / widthUnits, (maxBoardHeight - pad * 2) / heightUnits)
-  );
-  const offsetX = pad + (Math.sqrt(3) * cellSize) / 2;
-  const offsetY = pad + cellSize;
-  const boardWidth = widthUnits * cellSize + pad * 2;
-  const boardHeight = heightUnits * cellSize + pad * 2;
+  const cellSize = Math.max(4, maxWidth / widthUnits);
+  const offsetX = (Math.sqrt(3) * cellSize) / 2;
+  const offsetY = cellSize;
+  const boardWidth = maxWidth;
+  const boardHeight = heightUnits * cellSize;
 
   const dragOriginRef = useRef<{ x: number; y: number } | null>(null);
   const gestureDirRef = useRef<Direction | null>(null);
@@ -137,7 +132,11 @@ export const GridCanvas: React.FC<GridCanvasProps> = ({
         }
       }
       if (currentDotId && dot.id === currentDotId) continue;
-      for (const pos of getOccupiedCells(dot.currentPos)) {
+      const targetCells = [dot.currentPos];
+      if (dot.characterId === 'tree' && (dot.handPos || dot.stretchedTo)) {
+        targetCells.push(dot.handPos ?? dot.stretchedTo!);
+      }
+      for (const pos of targetCells) {
         const { x: cx, y: cy } = cellToPixel(pos, cellSize, offsetX, offsetY);
         const d = Math.hypot(localX - cx, localY - cy);
         if (d < closestDist) {
@@ -377,32 +376,27 @@ export const GridCanvas: React.FC<GridCanvasProps> = ({
       const isBlack = blackBoxSet.has(key);
       const capturedBy = capturedHexes?.[key];
 
-      let cellFill = '#E4EBF3';
-      let cellStroke = '#B7C3D1';
-      let cellStrokeWidth = Math.max(0.8, cellSize * 0.07);
-
-      if (capturedBy === 1) {
-        // Player 1 captured (soft cyan tint)
-        cellFill = 'rgba(0, 229, 255, 0.22)';
-        cellStroke = 'rgba(0, 229, 255, 0.45)';
-        cellStrokeWidth = Math.max(1, cellSize * 0.08);
-      } else if (capturedBy === 2) {
-        // Player 2 captured (soft pink/red tint)
-        cellFill = 'rgba(255, 59, 107, 0.22)';
-        cellStroke = 'rgba(255, 59, 107, 0.45)';
-        cellStrokeWidth = Math.max(1, cellSize * 0.08);
-      }
-
       // Base board grid cell (underneath)
       hexCells.push(
         <Path
           key={`hex_${r}_${c}`}
           d={hexPolygonPath(x, y, cellSize * 0.97)}
-          fill={cellFill}
-          stroke={cellStroke}
-          strokeWidth={cellStrokeWidth}
+          fill="#E4EBF3"
+          stroke="#B7C3D1"
+          strokeWidth={Math.max(0.8, cellSize * 0.07)}
         />
       );
+
+      // Captured territory hex: identical to body hex white border, difference is only color intensity (no black border)
+      if (capturedBy === 1 || capturedBy === 2) {
+        const regionFill = capturedBy === 1 ? PLAYER_COLORS.P1.region : PLAYER_COLORS.P2.region;
+        hexCells.push(
+          <G key={`captured_${r}_${c}`}>
+            <Path d={hexPolygonPath(x, y, cellSize * 0.76)} fill="#FFFFFF" />
+            <Path d={hexPolygonPath(x, y, cellSize * 0.62)} fill={regionFill} />
+          </G>
+        );
+      }
 
       // If black box obstacle: style exactly like dot boxes (TrailHex) with black inside
       if (isBlack) {
@@ -444,11 +438,12 @@ export const GridCanvas: React.FC<GridCanvasProps> = ({
     return ordered;
   };
 
-  const trailColor = (player: 1 | 2) => (player === 1 ? '#00E5FF' : '#FF3B6B');
+  const trailColor = (player: 1 | 2) =>
+    player === 1 ? (p1DotColor || PLAYER_COLORS.P1.body) : (p2DotColor || PLAYER_COLORS.P2.body);
 
   const trailHeadFillForDot = (dot: Dot) => {
     const character = getCharacterForDot(dot.id, characterLoadout);
-    return character.trailAccentColor ?? character.dotColor;
+    return dot.player === 1 ? (p1DotColor || PLAYER_COLORS.P1.body) : (p2DotColor || PLAYER_COLORS.P2.body);
   };
 
   const trailCellsFor = (dot: Dot) => {
@@ -644,28 +639,22 @@ export const GridCanvas: React.FC<GridCanvasProps> = ({
         {renderMoveGuides()}
         {renderPreview()}
 
-        {/* Tree branchable head indicators */}
+        {/* Stretched Tree hand indicator */}
         {dots.map((dot) => {
-          if (!dot || !dot.isAlive || dot.characterId !== 'tree' || !dot.treeNodes) return null;
-          return dot.treeNodes
-            .filter((n) => n.childrenIds.length < 2)
-            .map((node) => {
-              const { x: cx, y: cy } = cellToPixel(node.pos, cellSize, offsetX, offsetY);
-              const isSelectedHead =
-                dot.id === effectiveSelectedDotId &&
-                pointsEqual(dot.currentPos, node.pos);
-              return (
-                <G key={`tree_head_marker_${dot.id}_${node.id}`}>
-                  <Path
-                    d={hexPolygonPath(cx, cy, cellSize * 0.92)}
-                    fill="none"
-                    stroke={isSelectedHead ? '#FFFFFF' : '#10B981'}
-                    strokeWidth={isSelectedHead ? 2.5 : 1.5}
-                    strokeDasharray={isSelectedHead ? undefined : '3,3'}
-                  />
-                </G>
-              );
-            });
+          if (!dot || !dot.isAlive || dot.characterId !== 'tree' || !dot.handPos) return null;
+          const { x: cx, y: cy } = cellToPixel(dot.handPos, cellSize, offsetX, offsetY);
+          const isSelected = dot.id === effectiveSelectedDotId;
+          return (
+            <G key={`tree_hand_marker_${dot.id}`}>
+              <Path
+                d={hexPolygonPath(cx, cy, cellSize * 0.94)}
+                fill="none"
+                stroke={dot.player === 1 ? PLAYER_COLORS.P1.body : PLAYER_COLORS.P2.body}
+                strokeWidth={2.5}
+                strokeDasharray="4,4"
+              />
+            </G>
+          );
         })}
 
         {/* Active Player Node Markers */}
@@ -697,12 +686,14 @@ export const GridCanvas: React.FC<GridCanvasProps> = ({
       >
         {dots.map((dot) => {
           if (!dot || !dot.isAlive || dot.player !== activePlayer) return null;
-          if (dot.characterId === 'tree' && dot.treeNodes && dot.treeNodes.length > 0) {
-            return dot.treeNodes.map((node) => {
-              const { x: cx, y: cy } = cellToPixel(node.pos, cellSize, offsetX, offsetY);
-              return (
+          if (dot.characterId === 'tree' && (dot.handPos || dot.stretchedTo)) {
+            const hand = dot.handPos ?? dot.stretchedTo!;
+            const { x: cx, y: cy } = cellToPixel(dot.currentPos, cellSize, offsetX, offsetY);
+            const { x: tx, y: ty } = cellToPixel(hand, cellSize, offsetX, offsetY);
+            return (
+              <React.Fragment key={`tap_tree_pair_${dot.id}`}>
                 <TouchableOpacity
-                  key={`tap_tree_${dot.id}_${node.id}`}
+                  key={`tap_tree_head_${dot.id}`}
                   style={{
                     position: 'absolute',
                     left: cx - 26,
@@ -712,14 +703,25 @@ export const GridCanvas: React.FC<GridCanvasProps> = ({
                     borderRadius: 26,
                     backgroundColor: 'transparent',
                   }}
-                  onPress={() => {
-                    onSelectTreeHead?.(dot.id, node.id);
-                    onSelectDot(dot.id);
-                  }}
+                  onPress={() => onSelectDot(dot.id)}
                   activeOpacity={0.65}
                 />
-              );
-            });
+                <TouchableOpacity
+                  key={`tap_tree_tip_${dot.id}`}
+                  style={{
+                    position: 'absolute',
+                    left: tx - 26,
+                    top: ty - 26,
+                    width: 52,
+                    height: 52,
+                    borderRadius: 26,
+                    backgroundColor: 'transparent',
+                  }}
+                  onPress={() => onSelectDot(dot.id)}
+                  activeOpacity={0.65}
+                />
+              </React.Fragment>
+            );
           }
           const occupied = getOccupiedCells(dot.currentPos);
           return occupied.map((cell, idx) => {

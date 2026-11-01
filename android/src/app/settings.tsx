@@ -14,6 +14,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GAME_THEMES, KILL_EFFECTS } from '../constants/theme';
+import { PLAYER_COLORS } from '../constants/gameColors';
 import {
   CHARACTER_LIST,
   parseCharacterLoadout,
@@ -63,7 +64,7 @@ export default function SettingsScreen() {
         return { p1: '#9B51E0', p2: '#FE53BB' };
       case 'cyber-neon':
       default:
-        return { p1: '#00E5FF', p2: '#FF3B6B' };
+        return { p1: PLAYER_COLORS.P1.body, p2: PLAYER_COLORS.P2.body };
     }
   };
 
@@ -109,8 +110,8 @@ export default function SettingsScreen() {
   };
 
   const COLOR_PALETTE = [
-    { value: '#00E5FF', label: 'Electric Blue' },
-    { value: '#FF3B6B', label: 'Neon Red' },
+    { value: PLAYER_COLORS.P1.body, label: PLAYER_COLORS.P1.name },
+    { value: PLAYER_COLORS.P2.body, label: PLAYER_COLORS.P2.name },
     { value: '#00FF66', label: 'Green' },
     { value: '#FFB900', label: 'Gold' },
     { value: '#FF2A2A', label: 'Red' },

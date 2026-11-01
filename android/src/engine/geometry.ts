@@ -248,19 +248,16 @@ export function hexBoardMetrics(maxWidth: number, maxHeight: number): {
   offsetX: number;
   offsetY: number;
 } {
-  const pad = 12;
+  const pad = 0;
   const widthUnits = Math.sqrt(3) * (GRID_CONFIG.COLS + 0.5);
   const heightUnits = 1.5 * (GRID_CONFIG.ROWS - 1) + 2;
-  const hexSize = Math.max(
-    3,
-    Math.min((maxWidth - pad * 2) / widthUnits, (maxHeight - pad * 2) / heightUnits)
-  );
+  const hexSize = Math.max(3, maxWidth / widthUnits);
   return {
     hexSize,
-    boardWidth: widthUnits * hexSize + pad * 2,
-    boardHeight: heightUnits * hexSize + pad * 2,
-    offsetX: pad + (Math.sqrt(3) * hexSize) / 2,
-    offsetY: pad + hexSize,
+    boardWidth: maxWidth,
+    boardHeight: heightUnits * hexSize,
+    offsetX: (Math.sqrt(3) * hexSize) / 2,
+    offsetY: hexSize,
   };
 }
 
@@ -326,6 +323,23 @@ export function isPointInTriangle(
  * Specifically, all hexes inside the triangle formed by head, branchEndA, branchEndB,
  * plus all hexes along the boundary segments HA, HB, and AB.
  */
+function distToSegment(
+  p: { x: number; y: number },
+  a: { x: number; y: number },
+  b: { x: number; y: number }
+): number {
+  const l2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+  if (l2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  let t = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y)));
+}
+
+/**
+ * Returns all hexes within the region between two lines HA and HB meeting at head:
+ * Specifically, all hexes inside the triangle formed by head, endA, endB,
+ * plus all hexes along lines HA, HB, and the region in between.
+ */
 export function getHexesInTriangleArea(head: Point, endA: Point, endB: Point): Point[] {
   const seen = new Set<string>();
   const hexes: Point[] = [];
@@ -338,31 +352,102 @@ export function getHexesInTriangleArea(head: Point, endA: Point, endB: Point): P
     hexes.push(p);
   };
 
-  // 1. Boundary lines: HA, HB, AB
+  // 1. Boundary lines: HA and HB
   for (const cell of getSegmentCells(head, endA)) add(cell);
   for (const cell of getSegmentCells(head, endB)) add(cell);
-  for (const cell of getSegmentCells(endA, endB)) add(cell);
 
-  // 2. Interior points: use normalized coordinates where hexSize = 10, offset = 0
-  const hPix = cellToPixel(head, 10, 0, 0);
-  const aPix = cellToPixel(endA, 10, 0, 0);
-  const bPix = cellToPixel(endB, 10, 0, 0);
+  const hexSize = 10;
+  const hPix = cellToPixel(head, hexSize, 0, 0);
+  const aPix = cellToPixel(endA, hexSize, 0, 0);
+  const bPix = cellToPixel(endB, hexSize, 0, 0);
 
   // Bounding box of the triangle in rows and cols
-  const minR = Math.max(0, Math.min(head.r, endA.r, endB.r) - 1);
-  const maxR = Math.min(GRID_CONFIG.ROWS - 1, Math.max(head.r, endA.r, endB.r) + 1);
-  const minC = Math.max(0, Math.min(head.c, endA.c, endB.c) - 1);
-  const maxC = Math.min(GRID_CONFIG.COLS - 1, Math.max(head.c, endA.c, endB.c) + 1);
+  const minR = Math.max(0, Math.min(head.r, endA.r, endB.r) - 2);
+  const maxR = Math.min(GRID_CONFIG.ROWS - 1, Math.max(head.r, endA.r, endB.r) + 2);
+  const minC = Math.max(0, Math.min(head.c, endA.c, endB.c) - 2);
+  const maxC = Math.min(GRID_CONFIG.COLS - 1, Math.max(head.c, endA.c, endB.c) + 2);
 
   for (let r = minR; r <= maxR; r++) {
     for (let c = minC; c <= maxC; c++) {
       const pt = { r, c };
-      const pix = cellToPixel(pt, 10, 0, 0);
-      if (isPointInTriangle(pix, hPix, aPix, bPix)) {
+      const center = cellToPixel(pt, hexSize, 0, 0);
+
+      if (isPointInTriangle(center, hPix, aPix, bPix)) {
+        add(pt);
+        continue;
+      }
+
+      const verts = hexVertices(center.x, center.y, hexSize);
+      let inTri = false;
+      for (const v of verts) {
+        if (isPointInTriangle(v, hPix, aPix, bPix)) {
+          inTri = true;
+          break;
+        }
+      }
+      if (inTri) {
+        add(pt);
+        continue;
+      }
+
+      if (
+        distToSegment(center, hPix, aPix) <= hexSize * 0.85 ||
+        distToSegment(center, hPix, bPix) <= hexSize * 0.85 ||
+        distToSegment(center, aPix, bPix) <= hexSize * 0.85
+      ) {
         add(pt);
       }
     }
   }
 
   return hexes;
+}
+
+
+/** Returns up to count (default 5) nearby hexes around center, including center itself. */
+export function getNearbyPaintHexes(center: Point, count: number = 5): Point[] {
+  const result: Point[] = [center];
+  const seen = new Set<string>([`${center.r},${center.c}`]);
+
+  for (const dir of HEX_DIRECTIONS) {
+    if (result.length >= count) break;
+    const neighbor = stepHex(center, dir);
+    const key = `${neighbor.r},${neighbor.c}`;
+    if (isWithinBounds(neighbor) && !seen.has(key)) {
+      seen.add(key);
+      result.push(neighbor);
+    }
+  }
+
+  if (result.length < count) {
+    const radiusHexes = getHexesInRadius(center, 2);
+    for (const h of radiusHexes) {
+      if (result.length >= count) break;
+      const key = `${h.r},${h.c}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(h);
+      }
+    }
+  }
+
+  return result;
+}
+
+
+/** Returns center and all surrounding neighbor hexes in all 6 directions. */
+export function getSurroundingPaintHexes(center: Point): Point[] {
+  const result: Point[] = [center];
+  const seen = new Set<string>([`${center.r},${center.c}`]);
+
+  for (const dir of HEX_DIRECTIONS) {
+    const neighbor = stepHex(center, dir);
+    const key = `${neighbor.r},${neighbor.c}`;
+    if (isWithinBounds(neighbor) && !seen.has(key)) {
+      seen.add(key);
+      result.push(neighbor);
+    }
+  }
+
+  return result;
 }

@@ -1,3 +1,5 @@
+import { PLAYER_COLORS } from './gameColors';
+
 export interface GameTheme {
   id: string;
   name: string;
@@ -28,14 +30,14 @@ export const GAME_THEMES: GameTheme[] = [
       boardBackground: '#020617', // Slate 950
       gridLine: 'rgba(51, 65, 85, 0.2)', // Slate 700 with opacity
       gridDot: '#475569',         // Slate 600
-      p1Shades: ['#00E5FF', '#60A5FA', '#06B6D4'], // Electric Blue, Sky Blue, Cyan
-      p2Shades: ['#FF3B6B', '#F87171', '#F43F5E'], // Neon Red, Coral Red, Rose Pink
+      p1Shades: [PLAYER_COLORS.P1.body, PLAYER_COLORS.P1.accent, PLAYER_COLORS.P1.light],
+      p2Shades: [PLAYER_COLORS.P2.body, PLAYER_COLORS.P2.accent, PLAYER_COLORS.P2.light],
       textPrimary: '#F8FAFC',
       textSecondary: '#94A3B8',
       cardBackground: '#1E293B',
       border: '#334155',
       shadowColor: '#000000',
-      accent: '#00E5FF',
+      accent: PLAYER_COLORS.P1.body,
     },
   },
   {

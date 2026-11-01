@@ -134,7 +134,7 @@ export const LEVELS: LevelConfig[] = [
     id: 1,
     name: 'Level 1',
     title: 'Training Grounds',
-    description: 'Easy AI • 3 Units (2 Classic + 1 Tree)',
+    description: 'Easy AI • 3 Units',
     difficulty: 'easy',
     botDelayMs: 800,
     dots: DEFAULT_DOTS,
@@ -271,9 +271,23 @@ function getCoordinatesForPowerType(level: LevelConfig, type: string): Point[] {
   if (!level.pos_power) return [];
   const normalized = type.toUpperCase();
   if (Array.isArray(level.pos_power)) {
-    return level.pos_power
+    const raw = level.pos_power
       .filter((p) => p.type && p.type.toUpperCase() === normalized)
       .flatMap((p) => p.coordinates ?? []);
+    
+    // Scale from 36x21 coordinate space to 25x15 if needed, and ensure within bounds
+    const seen = new Set<string>();
+    const scaled: Point[] = [];
+    for (const p of raw) {
+      const r = Math.min(22, Math.max(2, Math.round((p.r * 24) / 35)));
+      const c = Math.min(13, Math.max(1, Math.round((p.c * 14) / 20)));
+      const key = `${r},${c}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        scaled.push({ r, c });
+      }
+    }
+    return scaled;
   }
   return [];
 }

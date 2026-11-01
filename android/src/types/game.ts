@@ -63,10 +63,17 @@ export interface Dot {
   currentPos: Point;
   history: LineSegment[]; // Line history queue for Classic (and visible branches for Tree)
   isAlive: boolean;
+  initialStartPos?: Point;
+  handPos?: Point;
+  handSegment?: LineSegment;
   /** Binary Tree structures */
   treeNodes?: TreeNode[];
   treeBranches?: TreeBranch[];
   activeHeadNodeId?: string;
+  /** Tree stretching state */
+  stretchedFrom?: Point;
+  stretchedTo?: Point;
+  isStretched?: boolean;
 }
 
 /** Six neighbors of a pointy-top hex. There is no straight north or south step. */

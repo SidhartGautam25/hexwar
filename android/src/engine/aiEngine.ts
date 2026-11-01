@@ -40,19 +40,7 @@ export function getLegalMoves(gameState: GameState): AIMove[] {
   const directions: Direction[] = HEX_DIRECTIONS;
 
   for (const dot of eligibleDots) {
-    const candidateHeads: { pos: Point; headId?: string }[] = [];
-    if (dot.characterId === 'tree') {
-      const activeHeads = getTreeActiveHeads(dot);
-      if (activeHeads.length > 0) {
-        for (const h of activeHeads) {
-          candidateHeads.push({ pos: h.pos, headId: h.id });
-        }
-      } else {
-        candidateHeads.push({ pos: dot.currentPos, headId: dot.activeHeadNodeId });
-      }
-    } else {
-      candidateHeads.push({ pos: dot.currentPos });
-    }
+    const candidateHeads: { pos: Point; headId?: string }[] = [{ pos: dot.currentPos }];
 
     for (const head of candidateHeads) {
       // Temporarily set currentPos and activeHeadNodeId if needed for path check
