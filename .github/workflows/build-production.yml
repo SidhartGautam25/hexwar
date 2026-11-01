@@ -1,0 +1,204 @@
+name: Build Android Production
+
+on:
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+    steps:
+
+      # =========================================================
+      # FREE DISK SPACE
+      # IMPORTANT: DO NOT DELETE THE ANDROID SDK
+      # =========================================================
+      - name: Free Disk Space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+
+          echo "Disk space after cleanup:"
+          df -h
+
+
+      # =========================================================
+      # CHECKOUT
+      # =========================================================
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+
+      # =========================================================
+      # SETUP NODE
+      # =========================================================
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: android/package-lock.json
+
+
+      # =========================================================
+      # SETUP JAVA
+      # =========================================================
+      - name: Setup JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+
+      # =========================================================
+      # SETUP GRADLE
+      # =========================================================
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+
+      # =========================================================
+      # VERIFY ANDROID SDK
+      # =========================================================
+      - name: Verify Android SDK
+        run: |
+          echo "=========================================="
+          echo "ANDROID SDK CONFIGURATION"
+          echo "=========================================="
+
+          echo "ANDROID_HOME:"
+          echo "$ANDROID_HOME"
+
+          echo "ANDROID_SDK_ROOT:"
+          echo "$ANDROID_SDK_ROOT"
+
+          echo ""
+          echo "Checking SDK directory..."
+
+          if [ ! -d "$ANDROID_HOME" ]; then
+            echo "ERROR: Android SDK was not found at:"
+            echo "$ANDROID_HOME"
+            exit 1
+          fi
+
+          echo "Android SDK found."
+
+
+      # =========================================================
+      # INSTALL NPM DEPENDENCIES
+      # =========================================================
+      - name: Install Dependencies
+        working-directory: android
+        run: npm ci --prefer-offline
+
+
+      # =========================================================
+      # GENERATE NATIVE ANDROID PROJECT
+      # =========================================================
+      - name: Prebuild Native Folders
+        working-directory: android
+        run: npx expo prebuild --platform android --no-install
+
+
+      # =========================================================
+      # CONFIGURE LOCAL.PROPERTIES
+      # =========================================================
+      - name: Configure Android SDK for Gradle
+        working-directory: android/android
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+
+      # =========================================================
+      # SETUP RELEASE KEYSTORE
+      # =========================================================
+      - name: Setup Release Keystore
+        run: |
+          mkdir -p android/android/app
+          if [ -f "android/release.keystore" ]; then
+            cp android/release.keystore android/android/app/release.keystore
+            echo "Copied repository release.keystore to app directory."
+          else
+            keytool -genkeypair -v -storetype PKCS12 \
+              -keystore android/android/app/release.keystore \
+              -alias release-key-alias \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass releasepass123 -keypass releasepass123 \
+              -dname "CN=Devlooper Studio Games, OU=Mobile Games, O=Devlooper, L=US, ST=US, C=US"
+            echo "Generated new release.keystore."
+          fi
+
+
+      # =========================================================
+      # BUILD APK + AAB (SIGNED IN RELEASE MODE)
+      # =========================================================
+      - name: Build Release APK and AAB
+        working-directory: android/android
+        env:
+          GRADLE_OPTS: >-
+            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g"
+            -Dorg.gradle.workers.max=4
+            -Dorg.gradle.daemon=false
+            -Dorg.gradle.parallel=true
+            -Dorg.gradle.caching=true
+
+        run: |
+          chmod +x gradlew
+          KEYSTORE_PATH="$(pwd)/app/release.keystore"
+
+          echo "=========================================="
+          echo "BUILDING & SIGNING RELEASE APK"
+          echo "=========================================="
+
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
+            -Pandroid.injected.signing.store.password=releasepass123 \
+            -Pandroid.injected.signing.key.alias=release-key-alias \
+            -Pandroid.injected.signing.key.password=releasepass123 \
+            --no-daemon \
+            --max-workers=4 \
+            --build-cache
+
+          echo ""
+          echo "=========================================="
+          echo "BUILDING & SIGNING RELEASE AAB FOR PLAY STORE"
+          echo "=========================================="
+
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
+            -Pandroid.injected.signing.store.password=releasepass123 \
+            -Pandroid.injected.signing.key.alias=release-key-alias \
+            -Pandroid.injected.signing.key.password=releasepass123 \
+            --no-daemon \
+            --max-workers=4 \
+            --build-cache
+
+
+      # =========================================================
+      # UPLOAD APK
+      # =========================================================
+      - name: Upload Release APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: android/android/app/build/outputs/apk/release/*.apk
+          retention-days: 7
+
+
+      # =========================================================
+      # UPLOAD AAB
+      # =========================================================
+      - name: Upload Release AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: android/android/app/build/outputs/bundle/release/*.aab
+          retention-days: 7

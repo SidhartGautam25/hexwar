@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+android/node_modules/
+server/node_modules/
+
+# Expo / Metro
+.expo/
+android/.expo/
+dist/
+android/dist/
+web-build/
+android/web-build/
+expo-env.d.ts
+android/expo-env.d.ts
+.metro-health-check*
+android/.metro-health-check*
+
+# Local Env Files
+.env
+.env*.local
+android/.env*.local
+server/.env*.local
+
+# Debug and Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+
+# macOS & Windows system files
+.DS_Store
+Thumbs.db
+
+# TypeScript Build Info
+*.tsbuildinfo
+android/*.tsbuildinfo
+
+# IDEs and Editors
+.vscode/
+android/.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

@@ -1,0 +1,44 @@
+================================================================================
+REACT NATIVE SAFE-AREA & DYNAMIC LAYOUT OPTIMIZATION PROMPT
+================================================================================
+
+Copy and paste the prompt below into any AI agent (like Antigravity) to automatically audit and resolve safe-area collisions, bottom/top navigation overlaps, and screen height responsiveness issues across all screens.
+
+--- COPY THE PROMPT BELOW ---
+
+Please audit and optimize the application's layout system to resolve status bar (top) overlaps, bottom navigation bar collisions, and screen-size responsiveness issues on all pages. Follow the production standards and implementation details outlined below:
+
+### 1. RESOLVE BOTTOM NAVIGATION BAR COLLISIONS (SAFE AREAS)
+*   **The Issue**: Content or action buttons are rendered behind the phone's bottom navigation buttons (3-button navbar or home gesture bar), causing overlaps and accidental taps.
+*   **The Fix**:
+    1. Import `useSafeAreaInsets` from `react-native-safe-area-context` to read dynamic device offsets.
+    2. Identify if the device is using a traditional 3-button navigation bar (where `insets.bottom >= 30` or similar threshold on Android) versus modern gestural navigation.
+    3. For 3-button navigation, add an opaque spacer container at the very bottom of the screen with a height equal to `insets.bottom` and a background color matching the screen's background (or `#000000`) so content is never drawn behind it.
+    4. For gestural navigation, apply dynamic bottom margins (`marginBottom: Math.max(insets.bottom, 12)`) on the main bottom panels/buttons to ensure they float cleanly above the home indicator.
+
+### 2. RESOLVE TOP STATUS BAR OVERLAPS
+*   **The Issue**: Page headers, back buttons, or game actions overlap with the top network, battery, and clock indicators.
+*   **The Fix**:
+    1. Do not use generic top margins. Use `insets.top` from `useSafeAreaInsets`.
+    2. Add a status bar spacer view at the very top of each page container:
+       `<View style={{ height: insets.top, backgroundColor: currentThemeColors.background }} />`
+    3. Ensure `StatusBar` from `react-native` is styled correctly (e.g., `<StatusBar barStyle="light-content" backgroundColor={currentThemeColors.background} />`).
+
+### 3. IMPLEMENT PERCENTAGE-BASED FLEXBOX LAYOUTS (SCALING & RESPONSIVENESS)
+*   **The Issue**: Hardcoded layout heights (e.g. `height: 600`) crop content on short screens or leave ugly empty space on tall screens.
+*   **The Fix**:
+    1. Avoid absolute, fixed pixel heights for main panels. Use `flexGrow: 1` or `flex: 1` to distribute space proportionally.
+    2. Group screen components into structured flex regions (e.g., Header, Board/Content Canvas, and Bottom Panel).
+    3. On short screens (e.g., `Dimensions.get('window').height < 750`), compress container padding (e.g., reduce padding from 20 to 12) and shrink text sizes to fit the layout naturally.
+
+### 4. DYNAMIC CANVAS MEASUREMENT (SVG/CANVAS RENDERING)
+*   **The Issue**: Fixed canvas sizes shake, scale incorrectly, or get cut off when changing screens.
+*   **The Fix**:
+    1. Wrap the SVG or canvas element in a container `<View style={{ flex: 1 }} onLayout={...} />`.
+    2. Use the `onLayout` callback to measure the container's exact available width and height dynamically:
+       `onLayout={(e) => { const { width, height } = e.nativeEvent.layout; setBoardLayout({ width, height }); }}`
+    3. Render the SVG only when measurements are active, using the measured width/height to scale grid columns, rows, cell sizes, and offsets dynamically.
+
+Please apply these rules to all screens in the codebase and verify the layouts compile cleanly with 0 errors.
+
+--- END OF PROMPT ---
