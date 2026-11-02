@@ -7,30 +7,20 @@ export function isTokenPoolEmpty(pool: TokenPool): boolean {
   return ALL_TOKEN_VALUES.every((value) => (pool[value] ?? 0) <= 0);
 }
 
-/** Starting stock is unchanged. Free use of 1, 2, and 3 is applied when the pool is read. */
+/** No refill after cards are spent — both players get their 4 chances per number. */
 export function refillTokenPoolIfEmpty(pool: TokenPool): TokenPool {
   return pool;
 }
 
 /**
- * After every card is spent, distances 1, 2, and 3 stay available until the match ends.
- * Longer cards stay empty.
+ * Both players get exact token counts (no unlimited 1, 2, 3 after cards are used up).
  */
 export function getEffectiveTokenPool(pool: TokenPool): TokenPool {
-  if (!isTokenPoolEmpty(pool)) return pool;
-  return {
-    ...pool,
-    1: 1,
-    2: 1,
-    3: 1,
-    4: 0,
-    5: 0,
-    6: 0,
-  };
+  return pool;
 }
 
-export function isFreePlay(pool: TokenPool): boolean {
-  return isTokenPoolEmpty(pool);
+export function isFreePlay(_pool: TokenPool): boolean {
+  return false;
 }
 
 export function freePlayValues(): readonly number[] {

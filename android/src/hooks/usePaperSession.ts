@@ -9,7 +9,7 @@ import {
   GRID_CONFIG,
 } from '../constants/board';
 import { createBoardFeatures } from '../constants/boardFeaturePlacements';
-import { executeShot, hasAnyValidMoves } from '../engine/paperEngine';
+import { executeShot, hasAnyValidMoves, resolveEndGameWinner } from '../engine/paperEngine';
 import { getRequiredDotIdForPlayer } from '../engine/boardFeatureEngine';
 import { refillTokenPoolIfEmpty, getEffectiveTokenPool } from '../utils/tokenPool';
 import { recordGameOutcome } from '../utils/stats';
@@ -222,8 +222,15 @@ export function usePaperSession(
           setActivePlayer(1);
         }
       } else {
-        setHistoryLogs((prev) => ['Bot has no available moves. Turn passed to Player.', ...prev]);
-        setActivePlayer(1);
+        const p1HasMoves = hasAnyValidMoves(1, dots, player1Tokens, boardFeatures, boardObstacles);
+        if (!p1HasMoves) {
+          const w = resolveEndGameWinner(dots, capturedHexes);
+          setWinner(w);
+          setHistoryLogs((prev) => ['Both players have completed all chances! Game Over.', ...prev]);
+        } else {
+          setHistoryLogs((prev) => ['Bot has no available moves. Turn passed to Player.', ...prev]);
+          setActivePlayer(1);
+        }
       }
       setIsAiThinking(false);
     }, botDelayMs);
@@ -243,6 +250,22 @@ export function usePaperSession(
     boardFeatures,
     botDelayMs,
   ]);
+
+  useEffect(() => {
+    if (activePlayer !== 1 || winner) return;
+    const p1HasMoves = hasAnyValidMoves(1, dots, player1Tokens, boardFeatures, boardObstacles);
+    if (!p1HasMoves) {
+      const p2HasMoves = hasAnyValidMoves(2, dots, player2Tokens, boardFeatures, boardObstacles);
+      if (!p2HasMoves) {
+        const w = resolveEndGameWinner(dots, capturedHexes);
+        setWinner(w);
+        setHistoryLogs((prev) => ['Both players have completed all chances! Game Over.', ...prev]);
+      } else {
+        setHistoryLogs((prev) => ['Player has no moves left. Passing turn to Bot.', ...prev]);
+        setActivePlayer(2);
+      }
+    }
+  }, [activePlayer, winner, dots, player1Tokens, player2Tokens, boardFeatures, boardObstacles, capturedHexes]);
 
   const selectDot = (dotId: string) => {
     if (activePlayer !== 1 || winner || isBotBlocked) return;

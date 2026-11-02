@@ -191,7 +191,7 @@ export function applyProximityTrapKills(
 
   const killedIds = Array.from(killIds);
   const nextDots = dots.map((d) =>
-    killIds.has(d.id) ? { ...d, isAlive: false, history: [] } : d
+    killIds.has(d.id) ? { ...d, isAlive: true, currentPos: { ...(d.initialStartPos ?? d.currentPos) }, history: [], handPos: undefined, handSegment: undefined } : d
   );
 
   const logMessages = [
@@ -288,7 +288,7 @@ export function applyZoneTrapKills(
 
   const killedIds = Array.from(killIds);
   const nextDots = dots.map((d) =>
-    killIds.has(d.id) ? { ...d, isAlive: false, history: [] } : d
+    killIds.has(d.id) ? { ...d, isAlive: true, currentPos: { ...(d.initialStartPos ?? d.currentPos) }, history: [], handPos: undefined, handSegment: undefined } : d
   );
 
   const logMessages = [

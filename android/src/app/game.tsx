@@ -180,33 +180,15 @@ export default function GameScreen() {
             interactive={false}
           />
 
-          {/* Territory Control Bar */}
+          {/* Territory Status: percentage and colored count only (no line scale) */}
           <View style={styles.territoryBarContainer}>
             <View style={styles.territoryLabelsRow}>
               <Text style={[styles.territoryLabel, { color: p1DotColor }]}>
                 Player: {p1Percent}% ({p1CapturedCount})
               </Text>
-              <Text style={[styles.territoryGoal, { color: themeColors.textSecondary }]}>
-                Goal: 50%
-              </Text>
               <Text style={[styles.territoryLabel, { color: p2DotColor }]}>
                 Bot: {p2Percent}% ({p2CapturedCount})
               </Text>
-            </View>
-            <View style={[styles.territoryTrack, { backgroundColor: '#1E293B' }]}>
-              <View
-                style={[
-                  styles.territoryFillP1,
-                  { width: `${Math.min(100, p1Percent * 2)}%`, backgroundColor: p1DotColor },
-                ]}
-              />
-              <View style={styles.territoryMidline} />
-              <View
-                style={[
-                  styles.territoryFillP2,
-                  { width: `${Math.min(100, p2Percent * 2)}%`, backgroundColor: p2DotColor },
-                ]}
-              />
             </View>
           </View>
         </View>
@@ -300,12 +282,12 @@ export default function GameScreen() {
             </Text>
             <Text style={[styles.overlayDesc, { color: themeColors.textSecondary }]}>
               {winner === 1
-                ? p1Percent >= 50
-                  ? 'Victory by Territory! You captured 50%+ of the grid!'
-                  : 'Victory! All opponent units eliminated.'
-                : p2Percent >= 50
-                ? 'Defeat. Bot captured 50%+ of the grid territory.'
-                : 'Defeat. All of your units were eliminated.'}
+                ? p1CapturedCount > p2CapturedCount
+                  ? `Victory! You colored ${p1CapturedCount} hexes vs Bot's ${p2CapturedCount} hexes!`
+                  : 'Victory! You captured greater territory!'
+                : p2CapturedCount > p1CapturedCount
+                ? `Defeat. Bot colored ${p2CapturedCount} hexes vs your ${p1CapturedCount} hexes.`
+                : 'Match finished!'}
             </Text>
 
             <View style={[styles.overlayScores, { borderColor: themeColors.border }]}>
@@ -379,8 +361,9 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     justifyContent: 'center',
-    alignItems: 'stretch',
+    alignItems: 'center',
     position: 'relative',
+    paddingVertical: 4,
   },
   bottomSection: {
     width: '100%',

@@ -94,15 +94,21 @@ export const GridCanvas: React.FC<GridCanvasProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
 
-  // Compute available space dynamically: width covers full screen width
-  const pad = 0;
+  // Proper space so board never hides at top or bottom
+  const pad = 8;
+  const containerBorder = 4;
+  const safeMaxWidth = Math.max(100, maxWidth - (pad + containerBorder) * 2);
+  const safeMaxHeight = Math.max(100, maxHeight - (pad + containerBorder) * 2);
+
   const widthUnits = Math.sqrt(3) * (GRID_CONFIG.COLS + 0.5);
   const heightUnits = 1.5 * (GRID_CONFIG.ROWS - 1) + 2;
-  const cellSize = Math.max(4, maxWidth / widthUnits);
-  const offsetX = (Math.sqrt(3) * cellSize) / 2;
-  const offsetY = cellSize;
-  const boardWidth = maxWidth;
-  const boardHeight = heightUnits * cellSize;
+
+  // Fit comfortably inside both width and height so nothing gets cut out
+  const cellSize = Math.max(4, Math.min(safeMaxWidth / widthUnits, safeMaxHeight / heightUnits));
+  const offsetX = pad + (Math.sqrt(3) * cellSize) / 2;
+  const offsetY = pad + cellSize;
+  const boardWidth = Math.ceil(widthUnits * cellSize + pad * 2);
+  const boardHeight = Math.ceil(heightUnits * cellSize + pad * 2);
 
   const dragOriginRef = useRef<{ x: number; y: number } | null>(null);
   const gestureDirRef = useRef<Direction | null>(null);
@@ -752,7 +758,7 @@ export const GridCanvas: React.FC<GridCanvasProps> = ({
 const styles = StyleSheet.create({
   container: {
     alignSelf: 'center',
-    borderWidth: 5,
+    borderWidth: 4,
     borderColor: '#C5D0DC',
     borderRadius: 12,
     backgroundColor: '#F4F7FB',

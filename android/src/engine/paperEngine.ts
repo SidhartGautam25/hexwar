@@ -273,85 +273,82 @@ export function executeShot(
   // "consider the hex dot initial point be R ( root ) and point H ( head ) and point A and B be the point of the line which opponent cross , then line from point A to H should be erared , so the thing is when opponent crosses a player hex , from that line to head ( movement made after that line ) should be erased . and the last thing is , player will ( of any type classic or tree or in future if we make any ) will be connected to their root ( or initial point )"
   updatedDots.forEach((d) => {
     if (d.player !== activePlayer && d.isAlive) {
-      // 1. Check if any body segment S_i (from Point A to Point B) in d.history is crossed or landed upon
-      let cutIndex = -1;
-      for (let i = 0; i < d.history.length; i++) {
-        const seg = d.history[i];
-        const intersects = areSegmentsIntersecting(
-          newSegment.start,
-          newSegment.end,
-          seg.start,
-          seg.end,
-          false
-        );
-        const landsOnSeg = getCellsAlongPath(seg.start, seg.end).some((pt) =>
-          pointsEqual(pt, endPos)
-        );
-        if (intersects || landsOnSeg) {
-          cutIndex = i;
-          break; // Earliest segment crossed from root
-        }
-      }
-
-      if (cutIndex !== -1) {
-        // Point A is the start of the crossed line (seg.start)
-        const cutPointA = { ...d.history[cutIndex].start };
-        const pruned = d.history.length - cutIndex;
-        // Erase line from Point A to Head H (all movements made after Point A)
-        d.history = d.history.slice(0, cutIndex);
-        // Head relocates to Point A
-        d.currentPos = cutPointA;
-        // If Tree, clear any outstretched hand
+      // 1. Direct Kill: opponent lands directly on Head H
+      if (pointsEqual(endPos, d.currentPos)) {
+        // Opponent kills hex dot: dot restarts from Root R
+        d.currentPos = { ...(d.initialStartPos ?? d.currentPos) };
+        d.history = [];
         if (d.characterId === 'tree') {
           d.handPos = undefined;
           d.handSegment = undefined;
         }
-        prunedLinesCount += pruned;
+        d.isAlive = true;
+        prunedLinesCount++;
         featureMessages.push(
           d.player === activePlayer
-            ? `Your trail was cut! Line from cut point to head erased (-${pruned} moves).`
-            : `Opponent trail cut! Line from cut point to head erased (-${pruned} moves).`
+            ? 'Your unit was killed! Restarted at Root R.'
+            : 'Opponent unit was killed! Restarted at Root R.'
         );
-      } else if (d.characterId === 'tree' && d.handSegment) {
-        // 2. Tree: check if mover cuts outstretched hand segment AB
-        const cutsHand =
-          areSegmentsIntersecting(
+      } else {
+        // 2. Check if any body segment S_i (from Point A to Point B) in d.history is crossed or landed upon
+        let cutIndex = -1;
+        for (let i = 0; i < d.history.length; i++) {
+          const seg = d.history[i];
+          const intersects = areSegmentsIntersecting(
             newSegment.start,
             newSegment.end,
-            d.handSegment.start,
-            d.handSegment.end,
+            seg.start,
+            seg.end,
             false
-          ) || pointsEqual(endPos, d.handSegment.end);
-        if (cutsHand) {
-          d.handPos = undefined;
-          d.handSegment = undefined;
-          prunedLinesCount++;
+          );
+          const landsOnSeg = getCellsAlongPath(seg.start, seg.end).some((pt) =>
+            pointsEqual(pt, endPos)
+          );
+          if (intersects || landsOnSeg) {
+            cutIndex = i;
+            break; // Earliest segment crossed from root
+          }
+        }
+
+        if (cutIndex !== -1) {
+          // Point A is the start of the crossed line (seg.start)
+          const cutPointA = { ...d.history[cutIndex].start };
+          const pruned = d.history.length - cutIndex;
+          // Erase line from Point A to Head H (all movements made after Point A)
+          d.history = d.history.slice(0, cutIndex);
+          // Head relocates to Point A
+          d.currentPos = cutPointA;
+          // If Tree, clear any outstretched hand
+          if (d.characterId === 'tree') {
+            d.handPos = undefined;
+            d.handSegment = undefined;
+          }
+          prunedLinesCount += pruned;
           featureMessages.push(
             d.player === activePlayer
-              ? 'Your Tree hand was cut!'
-              : 'Opponent Tree hand was cut!'
+              ? `Your trail was cut! Line from cut point to head erased (-${pruned} moves).`
+              : `Opponent trail cut! Line from cut point to head erased (-${pruned} moves).`
           );
-        }
-      } else if (pointsEqual(endPos, d.currentPos)) {
-        // 3. Opponent lands directly on Head H: erase last move leading into H
-        if (d.characterId === 'tree') {
-          d.handPos = undefined;
-          d.handSegment = undefined;
-        }
-        if (d.history.length > 0) {
-          d.history.pop();
-          d.currentPos =
-            d.history.length > 0
-              ? { ...d.history[d.history.length - 1].end }
-              : { ...(d.initialStartPos ?? d.currentPos) };
-          prunedLinesCount++;
-          featureMessages.push(
-            d.player === activePlayer
-              ? 'Your head was hit! Last move erased.'
-              : 'Opponent head was hit! Last move erased.'
-          );
-        } else {
-          d.currentPos = { ...(d.initialStartPos ?? d.currentPos) };
+        } else if (d.characterId === 'tree' && d.handSegment) {
+          // 3. Tree: check if mover cuts outstretched hand segment AB
+          const cutsHand =
+            areSegmentsIntersecting(
+              newSegment.start,
+              newSegment.end,
+              d.handSegment.start,
+              d.handSegment.end,
+              false
+            ) || pointsEqual(endPos, d.handSegment.end);
+          if (cutsHand) {
+            d.handPos = undefined;
+            d.handSegment = undefined;
+            prunedLinesCount++;
+            featureMessages.push(
+              d.player === activePlayer
+                ? 'Your Tree hand was cut!'
+                : 'Opponent Tree hand was cut!'
+            );
+          }
         }
       }
     }
@@ -537,44 +534,41 @@ export function executeShot(
   }
 
   const nextPlayer = activePlayer === 1 ? 2 : 1;
-  if (nextPlayer === 1) {
-    updatedPlayer1Tokens = refillTokenPoolIfEmpty(updatedPlayer1Tokens);
-  } else {
-    updatedPlayer2Tokens = refillTokenPoolIfEmpty(updatedPlayer2Tokens);
-  }
-
   forcedMoveByPlayer = clearForcedMoveAfterTurn(activePlayer, forcedMoveByPlayer);
 
-  const p1AliveCount = resolvedDots.filter((d) => d.player === 1 && d.isAlive).length;
-  const p2AliveCount = resolvedDots.filter((d) => d.player === 2 && d.isAlive).length;
+  const nextPlayerHasMoves = hasAnyValidMoves(
+    nextPlayer,
+    resolvedDots,
+    nextPlayer === 1 ? updatedPlayer1Tokens : updatedPlayer2Tokens,
+    gameState.boardFeatures,
+    obstacles
+  );
 
-  // 50% territory capture threshold
-  const totalPlayableHexes =
-    GRID_CONFIG.ROWS * GRID_CONFIG.COLS - (gameState.blackBoxes ?? []).length;
-  const winCaptureThreshold = Math.ceil(totalPlayableHexes * 0.5);
-
-  const p1Captured = Object.values(updatedCapturedHexes).filter((p) => p === 1).length;
-  const p2Captured = Object.values(updatedCapturedHexes).filter((p) => p === 2).length;
+  const activePlayerHasMoves = hasAnyValidMoves(
+    activePlayer,
+    resolvedDots,
+    activePlayer === 1 ? updatedPlayer1Tokens : updatedPlayer2Tokens,
+    gameState.boardFeatures,
+    obstacles
+  );
 
   let winner: 1 | 2 | null = null;
-  if (p1Captured >= winCaptureThreshold) {
-    winner = 1;
-  } else if (p2Captured >= winCaptureThreshold) {
-    winner = 2;
-  } else if (p2AliveCount === 0 && p1AliveCount > 0) {
-    winner = 1;
-  } else if (p1AliveCount === 0 && p2AliveCount > 0) {
-    winner = 2;
-  } else if (p1AliveCount === 0 && p2AliveCount === 0) {
-    winner = activePlayer;
-  }
+  let finalActivePlayer: 1 | 2 = nextPlayer;
 
+  if (!nextPlayerHasMoves && !activePlayerHasMoves) {
+    // Once both chances are over and no moves are possible, whoever has greater area colored will win
+    winner = resolveEndGameWinner(resolvedDots, updatedCapturedHexes);
+  } else if (!nextPlayerHasMoves && activePlayerHasMoves) {
+    finalActivePlayer = activePlayer;
+  } else {
+    finalActivePlayer = nextPlayer;
+  }
   return {
     success: true,
     dots: resolvedDots,
     player1Tokens: updatedPlayer1Tokens,
     player2Tokens: updatedPlayer2Tokens,
-    activePlayer: winner ? activePlayer : nextPlayer,
+    activePlayer: winner ? activePlayer : finalActivePlayer,
     winner,
     prunedLinesCount,
     killedDots,
