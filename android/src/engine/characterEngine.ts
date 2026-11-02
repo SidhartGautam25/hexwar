@@ -15,10 +15,7 @@ export function getMaxTrailLength(dot: Dot): number {
 export { getConnectedTrailHistory } from './geometry';
 
 export function getVisibleTrailSegments(dot: Dot): LineSegment[] {
-  // All dots remain continuously connected to their root
-  if (dot.characterId === 'tree' && dot.handSegment) {
-    return [...dot.history, dot.handSegment];
-  }
+  // Permanent body segments from root to current head
   return dot.history;
 }
 

@@ -1,4 +1,4 @@
-import { Dot, TokenPool, CharacterId, CurrencyRegion } from '../types/game';
+import { Dot, TokenPool, CharacterId, CurrencyRegion, Point } from '../types/game';
 import { DEFAULT_CHARACTER_LOADOUT } from './characters';
 
 export const GRID_CONFIG = {
@@ -17,7 +17,7 @@ export const INITIAL_TOKEN_POOL: TokenPool = {
   6: 4,
 };
 
-const DOT_POSITIONS: { id: string; player: 1 | 2; pos: { r: number; c: number } }[] = [
+export const DOT_POSITIONS: { id: string; player: 1 | 2; pos: { r: number; c: number } }[] = [
   { id: 'p1_1', player: 1, pos: { r: 24, c: 2 } },
   { id: 'p1_2', player: 1, pos: { r: 24, c: 7 } },
   { id: 'p1_3', player: 1, pos: { r: 24, c: 12 } },
@@ -25,6 +25,35 @@ const DOT_POSITIONS: { id: string; player: 1 | 2; pos: { r: number; c: number } 
   { id: 'p2_2', player: 2, pos: { r: 0, c: 7 } },
   { id: 'p2_3', player: 2, pos: { r: 0, c: 12 } },
 ];
+
+export function getInitialPositionForDot(dot: Dot): Point {
+  if (dot.initialStartPos) {
+    return { ...dot.initialStartPos };
+  }
+  const defaultPos = DOT_POSITIONS.find((def) => def.id === dot.id);
+  if (defaultPos) {
+    return { ...defaultPos.pos };
+  }
+  return { ...dot.currentPos };
+}
+
+export function resetDotToInitialPosition(dot: Dot): void {
+  const initialPos = getInitialPositionForDot(dot);
+  dot.currentPos = { ...initialPos };
+  dot.initialStartPos = { ...initialPos };
+  dot.history = [];
+  dot.isAlive = true;
+  dot.isStretched = false;
+  dot.handPos = undefined;
+  dot.handSegment = undefined;
+  if (dot.characterId === 'tree') {
+    dot.treeNodes = [
+      { id: `${dot.id}_root`, pos: { ...initialPos }, parentId: null, childrenIds: [] },
+    ];
+    dot.treeBranches = [];
+    dot.activeHeadNodeId = `${dot.id}_root`;
+  }
+}
 
 export function createInitialDots(
   playerLoadout: CharacterId[] = DEFAULT_CHARACTER_LOADOUT,

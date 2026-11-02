@@ -8,6 +8,7 @@ import {
 } from './geometry';
 import { canEliminateDot } from './boardFeatureEngine';
 import { getVisibleTrailSegments } from './characterEngine';
+import { resetDotToInitialPosition } from '../constants/board';
 
 export type { ZoneTrapCell };
 
@@ -190,9 +191,12 @@ export function applyProximityTrapKills(
   }
 
   const killedIds = Array.from(killIds);
-  const nextDots = dots.map((d) =>
-    killIds.has(d.id) ? { ...d, isAlive: true, currentPos: { ...(d.initialStartPos ?? d.currentPos) }, history: [], handPos: undefined, handSegment: undefined } : d
-  );
+  const nextDots = dots.map((d) => {
+    if (!killIds.has(d.id)) return d;
+    const copy = { ...d };
+    resetDotToInitialPosition(copy);
+    return copy;
+  });
 
   const logMessages = [
     activePlayer === 1
@@ -287,9 +291,12 @@ export function applyZoneTrapKills(
   }
 
   const killedIds = Array.from(killIds);
-  const nextDots = dots.map((d) =>
-    killIds.has(d.id) ? { ...d, isAlive: true, currentPos: { ...(d.initialStartPos ?? d.currentPos) }, history: [], handPos: undefined, handSegment: undefined } : d
-  );
+  const nextDots = dots.map((d) => {
+    if (!killIds.has(d.id)) return d;
+    const copy = { ...d };
+    resetDotToInitialPosition(copy);
+    return copy;
+  });
 
   const logMessages = [
     activePlayer === 1

@@ -1,7 +1,7 @@
 import { GameState, Dot, TokenPool, LineSegment, Direction, PlayerWallet, CurrencyRegion, Point, TreeNode, TreeBranch } from '../types/game';
 import { EngineResult } from '../types/engine';
 import { MoveNotification } from '../types/notifications';
-import { GRID_CONFIG } from '../constants/board';
+import { GRID_CONFIG, resetDotToInitialPosition } from '../constants/board';
 import {
   getMaxTrailLength,
   isTrapPointForOpponent,
@@ -273,21 +273,25 @@ export function executeShot(
   // "consider the hex dot initial point be R ( root ) and point H ( head ) and point A and B be the point of the line which opponent cross , then line from point A to H should be erared , so the thing is when opponent crosses a player hex , from that line to head ( movement made after that line ) should be erased . and the last thing is , player will ( of any type classic or tree or in future if we make any ) will be connected to their root ( or initial point )"
   updatedDots.forEach((d) => {
     if (d.player !== activePlayer && d.isAlive) {
-      // 1. Direct Kill: opponent lands directly on Head H
-      if (pointsEqual(endPos, d.currentPos)) {
-        // Opponent kills hex dot: dot restarts from Root R
-        d.currentPos = { ...(d.initialStartPos ?? d.currentPos) };
-        d.history = [];
-        if (d.characterId === 'tree') {
-          d.handPos = undefined;
-          d.handSegment = undefined;
+      // 1. Direct Kill: opponent lands directly on or moves through Head H (or occupied cells)
+      const landsOnHead =
+        pointsEqual(endPos, d.currentPos) ||
+        landingCells.some((c) => pointsEqual(c, d.currentPos));
+      const movesThroughHead = pathCells.some(
+        (pt) => !pointsEqual(pt, startPos) && pointsEqual(pt, d.currentPos)
+      );
+
+      if (landsOnHead || movesThroughHead) {
+        // Opponent kills hex dot: dot restarts from its initial point
+        resetDotToInitialPosition(d);
+        if (!killedDots.includes(d.id)) {
+          killedDots.push(d.id);
         }
-        d.isAlive = true;
         prunedLinesCount++;
         featureMessages.push(
-          d.player === activePlayer
-            ? 'Your unit was killed! Restarted at Root R.'
-            : 'Opponent unit was killed! Restarted at Root R.'
+          activePlayer === 1
+            ? 'Opponent unit was killed! Restarted at initial point.'
+            : 'Your unit was killed! Restarted at initial point.'
         );
       } else {
         // 2. Check if any body segment S_i (from Point A to Point B) in d.history is crossed or landed upon
@@ -325,9 +329,9 @@ export function executeShot(
           }
           prunedLinesCount += pruned;
           featureMessages.push(
-            d.player === activePlayer
-              ? `Your trail was cut! Line from cut point to head erased (-${pruned} moves).`
-              : `Opponent trail cut! Line from cut point to head erased (-${pruned} moves).`
+            activePlayer === 1
+              ? `Opponent trail cut! Line from cut point to head erased (-${pruned} moves).`
+              : `Your trail was cut! Line from cut point to head erased (-${pruned} moves).`
           );
         } else if (d.characterId === 'tree' && d.handSegment) {
           // 3. Tree: check if mover cuts outstretched hand segment AB
@@ -344,9 +348,9 @@ export function executeShot(
             d.handSegment = undefined;
             prunedLinesCount++;
             featureMessages.push(
-              d.player === activePlayer
-                ? 'Your Tree hand was cut!'
-                : 'Opponent Tree hand was cut!'
+              activePlayer === 1
+                ? 'Opponent Tree hand was cut!'
+                : 'Your Tree hand was cut!'
             );
           }
         }

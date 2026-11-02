@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { View, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { G, Path, Rect } from 'react-native-svg';
+import Svg, { G, Path, Rect, Circle } from 'react-native-svg';
 import { Dot, Direction, CharacterId, CurrencyRegion, BoardFeatureInstance, Point } from '../../types/game';
 import { GRID_CONFIG } from '../../constants/board';
 import { PLAYER_COLORS } from '../../constants/gameColors';
@@ -645,20 +645,49 @@ export const GridCanvas: React.FC<GridCanvasProps> = ({
         {renderMoveGuides()}
         {renderPreview()}
 
-        {/* Stretched Tree hand indicator */}
+        {/* Stretched Tree Hand: black outer rim, white ring, mid-tone inner color (lighter than body, stronger than region) */}
         {dots.map((dot) => {
-          if (!dot || !dot.isAlive || dot.characterId !== 'tree' || !dot.handPos) return null;
-          const { x: cx, y: cy } = cellToPixel(dot.handPos, cellSize, offsetX, offsetY);
-          const isSelected = dot.id === effectiveSelectedDotId;
+          if (!dot || !dot.isAlive || dot.characterId !== 'tree' || !dot.handPos || !dot.handSegment) return null;
+          const targetHand = dot.handPos;
+          const handColor = dot.player === 1 ? PLAYER_COLORS.P1.hand : PLAYER_COLORS.P2.hand;
+
+          // Hand cells along path from head to hand (excluding head A)
+          const handCells = getCellsAlongPath(dot.currentPos, targetHand).filter(
+            (p) => !pointsEqual(p, dot.currentPos)
+          );
+
           return (
-            <G key={`tree_hand_marker_${dot.id}`}>
-              <Path
-                d={hexPolygonPath(cx, cy, cellSize * 0.94)}
-                fill="none"
-                stroke={dot.player === 1 ? PLAYER_COLORS.P1.body : PLAYER_COLORS.P2.body}
-                strokeWidth={2.5}
-                strokeDasharray="4,4"
-              />
+            <G key={`tree_hand_group_${dot.id}`}>
+              {handCells.map((pt, idx) => {
+                const { x, y } = cellToPixel(pt, cellSize, offsetX, offsetY);
+
+                return (
+                  <G key={`hand_cell_${dot.id}_${idx}`}>
+                    {/* Outer black border rim (identical to body hex) */}
+                    <Path
+                      d={hexPolygonPath(x, y, cellSize * 0.90)}
+                      fill="#000000"
+                    />
+                    {/* Middle white ring */}
+                    <Path
+                      d={hexPolygonPath(x, y, cellSize * 0.76)}
+                      fill="#FFFFFF"
+                    />
+                    {/* Inner color: lighter than body, stronger than colored region */}
+                    <Path
+                      d={hexPolygonPath(x, y, cellSize * 0.62)}
+                      fill={handColor}
+                    />
+                    {/* Small white circle in the center */}
+                    <Circle
+                      cx={x}
+                      cy={y}
+                      r={cellSize * 0.18}
+                      fill="#FFFFFF"
+                    />
+                  </G>
+                );
+              })}
             </G>
           );
         })}

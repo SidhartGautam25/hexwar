@@ -12,6 +12,7 @@ export const PLAYER_COLORS = {
   P1: {
     name: 'Sunset Tangerine',
     body: '#EA580C',                    // Stronger/darker shade for player dot & trail body
+    hand: '#FB923C',                    // Mid-tone shade for hand (lighter than body, stronger than region)
     region: 'rgba(249, 115, 22, 0.42)', // Lighter version for colored captured hexes
     accent: '#F97316',                  // Bright accent
     light: '#FED7AA',
@@ -21,6 +22,7 @@ export const PLAYER_COLORS = {
   P2: {
     name: 'Electric Violet',
     body: '#7C3AED',                    // Stronger/darker shade for player dot & trail body
+    hand: '#A78BFA',                    // Mid-tone shade for hand (lighter than body, stronger than region)
     region: 'rgba(139, 92, 246, 0.58)', // Richer, slightly darker purple for captured hexes
     accent: '#8B5CF6',                  // Bright accent
     light: '#DDD6FE',
